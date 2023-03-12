@@ -68,26 +68,24 @@ class JFlexPlugin implements Plugin<Project> {
         SourceDirectorySet sourceDirectorySet = sourceSet.extensions.getByName('jflex') as SourceDirectorySet
         Provider<Directory> defaultTargetFile = project.layout.buildDirectory.dir("generated/sources/${sourceSet.name}")
 
-        Provider<File> targetFile = jFlexExtension.writeIntoJavaSrc.map {
-            if (it) {
-                if (sourceSet.java && sourceSet.java.srcDirs) {
-                    logger.info "java sources: ${sourceSet.java.srcDirs}"
-                    File target = sourceSet.java.srcDirs.first()
-                    logger.info "switching to first java source directory ${target}"
-                    return target
-                } else {
-                    logger.warn "writing into java source not possible, is empty"
-                    return defaultTargetFile.get().asFile
-                }
+        Provider<File> javaSrcDirectory = project.provider {
+            if (sourceSet.java && sourceSet.java.srcDirs) {
+                logger.info "java sources: ${sourceSet.java.srcDirs}"
+                File target = sourceSet.java.srcDirs.first()
+                logger.info "switching to first java source directory ${target}"
+                return target
             } else {
-                return defaultTargetFile.get().asFile
+                logger.warn "writing into java source not possible, is empty"
+                return defaultTargetFile.asFile
             }
         }
         TaskProvider<JFlexTask> taskProvider = project.tasks.register(taskName, JFlexTask) {
             group = 'jflex'
             description = 'Generates code from JFlex files in ' + sourceSet.name
             source = sourceDirectorySet.asList()
-            target.fileProvider(targetFile)
+            target.set(defaultTargetFile)
+            javaSrcDir.fileProvider(javaSrcDirectory)
+            javaSrcDir.disallowChanges()
 
             encoding.set(jFlexExtension.encoding)
             rootDirectory.set(jFlexExtension.rootDirectory)
@@ -106,11 +104,11 @@ class JFlexPlugin implements Plugin<Project> {
             writeIntoJavaSrc.set(jFlexExtension.writeIntoJavaSrc)
 
         }
-        logger.info "created ${taskName} for sources ${sourceDirectorySet.asList()} and target ${targetFile}"
+        logger.info "created ${taskName} for sources ${sourceDirectorySet.asList()} and target ${taskProvider.map({it.stableTarget})}"
         project.tasks.named(sourceSet.compileJavaTaskName).configure({
             dependsOn taskProvider
         })
-        sourceSet.java.srcDir(defaultTargetFile)
+        sourceSet.java.srcDir(taskProvider.map({it.writeIntoJavaSrc.get() ? defaultTargetFile : it}))
     }
 
     private static String capitalize(CharSequence charSequence) {

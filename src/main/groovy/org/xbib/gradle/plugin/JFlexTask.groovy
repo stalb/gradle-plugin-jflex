@@ -6,11 +6,13 @@ import jflex.logging.Out
 import jflex.option.Options
 import jflex.skeleton.Skeleton
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
@@ -86,8 +88,16 @@ abstract class JFlexTask extends DefaultTask {
     @PathSensitive(PathSensitivity.RELATIVE)
     Iterable<File> source
 
-    @OutputDirectory
+    @Internal
+    abstract DirectoryProperty getJavaSrcDir();
+
+    @Internal("tracked via stableTarget")
     abstract DirectoryProperty getTarget()
+
+    @OutputDirectory
+    Provider<Directory> getStableTarget() {
+        writeIntoJavaSrc.map({ it ? javaSrcDir.get(): target.get() })
+    }
 
     @TaskAction
     void generateAndTransformJflex() throws Exception {
@@ -107,7 +117,7 @@ abstract class JFlexTask extends DefaultTask {
         Options.dot = dot.get()
         Options.dump = dump.get()
         Options.legacy_dot = legacy_dot.get()
-        File targetFile = target.get().asFile
+        File targetFile = stableTarget.get().asFile
         source.each { file ->
             String pkg = getPackageName(file)
             File fullTarget = new File(targetFile, pkg.replace('.', '/'))
